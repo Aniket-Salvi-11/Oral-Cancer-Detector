@@ -53,34 +53,30 @@ def preprocess_image(img_bytes):
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    if request.method == 'POST':
-        # Get the file from post request
-        f = request.files['file']
-
-        # Save the file to ./uploads
-        file_path = os.path.join('static', 'uploads', secure_filename(f.filename))
-        f.save(file_path)
-
-        # Make prediction
-        prediction, confidence = model_predict(file_path)
-
-        # Determine diagnosis
-        if prediction > 0.5:  # Assuming threshold of 0.5 for cancer detection
-            diagnosis = "Oral Cancer Detected"
-            risk = "High Risk"
-        else:
-            diagnosis = "No Oral Cancer Detected"
-            risk = "Low Risk"
-
-        # Convert confidence to percentage
-        confidence_percent = confidence * 100
-
-        return render_template('result.html',
-                           diagnosis=diagnosis,
-                           risk=risk,
-                           confidence=f"{confidence_percent:.2f}%",
-                           prediction=prediction,
-                           user_image=file_path)
+    if not MODEL_READY:
+        return jsonify({'error': 'Model not loaded'}), 503
+    
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file provided'}), 400
+    
+    try:
+        file = request.files['file'].read()
+        
+        # Preprocess and predict
+        processed_img = preprocess_image(file)
+        prediction = model.predict(processed_img)
+        
+        # Interpret prediction (adjust based on your model)
+        result = {
+            'prediction': float(prediction[0][0]),  # Raw prediction value
+            'diagnosis': 'High Risk' if prediction[0][0] > 0.5 else 'Low Risk',
+            'confidence': round(float(prediction[0][0]) * 100, 2)
+        }
+        
+        return jsonify(result)
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
